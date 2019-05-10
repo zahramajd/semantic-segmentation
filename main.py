@@ -27,7 +27,7 @@ from tensorflow.keras.layers import Input, Add, Dropout, Permute, add
 from tensorflow.compat.v1.layers import conv2d_transpose
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from tensorflow.python.keras.callbacks import TensorBoard, ModelCheckpoint, EarlyStopping, ReduceLROnPlateau
-from tensorflow.keras.applications import resnet50
+from tensorflow.keras.applications import resnet50, vgg19
 
 
 def _read_to_tensor(fname, output_height=224, output_width=224, normalize_data=False):
@@ -340,7 +340,7 @@ def alexNetSegmentation(n_classes, input_height=227, input_width=227):
 
     return
 
-def ResNetsegmentation(n_classes, input_height=224, input_width=224):
+def ResNetSegmentation(n_classes, input_height=224, input_width=224):
 
     img_input = Input(shape=(input_height, input_width, 3))
 
@@ -380,7 +380,49 @@ def ResNetsegmentation(n_classes, input_height=224, input_width=224):
 
     return model
 
+def uNetSegmentation():
 
+    return 
+
+def vgg19Segmentation(n_classes, input_height=224, input_width=224):
+
+    img_input = Input(shape=(input_height, input_width, 3))
+
+    vgg19_model = vgg19.VGG19(input_tensor=img_input ,weights="imagenet")
+
+    o = vgg19_model.get_layer('block4_pool').output
+
+    o = (ZeroPadding2D((1,1), data_format='channels_last'))(o)
+    o = (Conv2D(512, (3, 3), padding='valid', data_format='channels_last'))(o)
+    o = (BatchNormalization())(o)
+    
+    o = (UpSampling2D((2,2), data_format='channels_last'))(o)
+    o = (ZeroPadding2D((1,1), data_format='channels_last'))(o)
+    o = (Conv2D(512, (3, 3), padding='valid', data_format='channels_last'))(o)
+    o = (BatchNormalization())(o)
+    
+    o = (UpSampling2D((2,2), data_format='channels_last'))(o)
+    o = (ZeroPadding2D((1,1), data_format='channels_last'))(o)
+    o = (Conv2D(256, (3, 3), padding='valid', data_format='channels_last'))(o)
+    o = (BatchNormalization())(o)
+
+    o = (UpSampling2D((2,2), data_format='channels_last'))(o)
+    o = (ZeroPadding2D((1,1), data_format='channels_last'))(o)
+    o = (Conv2D(128, (3, 3), padding='valid', data_format='channels_last'))(o)
+    o = (BatchNormalization())(o)
+
+    o = (UpSampling2D((2,2), data_format='channels_last'))(o)
+    o = (ZeroPadding2D((1,1), data_format='channels_last'))(o)
+    o = (Conv2D(64, (3, 3), padding='valid', data_format='channels_last'))(o)
+    o = (BatchNormalization())(o)
+    
+    
+    o = Conv2D(n_classes, (3, 3), padding='same', data_format='channels_last')(o)
+    o = (Activation('softmax'))(o)
+
+    model = Model(img_input, o)
+
+    return model
 
 img_dir = 'data/CamSeq01/'
 
@@ -401,7 +443,8 @@ val_masks_datagen = ImageDataGenerator(**mask_gen_args)
 
 
 # model = VGGSegnet(32, vgg_level=3)
-model = ResNetsegmentation(32)
+# model = ResNetSegmentation(32)
+model = vgg19Segmentation(32)
 
 
 model.compile(optimizer='adam', loss="categorical_crossentropy", metrics=['accuracy'])
