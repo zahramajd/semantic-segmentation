@@ -1,9 +1,5 @@
 ## Semantic Segmentation
-
 #TODO:
-# AlexNet: there isn't pretrained network
-# uNet: need to be searched
-
 # test parameters
 
 import numpy as np
@@ -23,11 +19,12 @@ import tensorflow.keras.backend as K
 import tensorflow as tf
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.layers import Convolution2D, ZeroPadding2D, MaxPooling2D, Cropping2D, Conv2D
-from tensorflow.keras.layers import Input, Add, Dropout, Permute, add
+from tensorflow.keras.layers import Input, Add, Dropout, Permute 
 from tensorflow.compat.v1.layers import conv2d_transpose
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from tensorflow.python.keras.callbacks import TensorBoard, ModelCheckpoint, EarlyStopping, ReduceLROnPlateau
 from tensorflow.keras.applications import resnet50, vgg19
+
 
 
 def _read_to_tensor(fname, output_height=224, output_width=224, normalize_data=False):
@@ -166,6 +163,25 @@ def TrainAugmentGenerator(DATA_PATH, id2code, seed = 1, batch_size = 5):
         
         yield X1i[0], np.asarray(mask_encoded)
 
+def TrainAugmentGenerator2(DATA_PATH, id2code, seed = 1, batch_size = 5):
+    
+    train_image_generator = train_frames_datagen.flow_from_directory(
+    DATA_PATH + 'train_frames/',
+    batch_size = batch_size, seed = seed, target_size = (227, 227))
+
+    train_mask_generator = train_masks_datagen.flow_from_directory(
+    DATA_PATH + 'train_masks/',
+    batch_size = batch_size, seed = seed, target_size = (227, 227))
+
+    while True:
+        X1i = train_image_generator.next()
+        X2i = train_mask_generator.next()
+        
+        #One hot encoding RGB images
+        mask_encoded = [rgb_to_onehot(X2i[0][x,:,:,:], id2code) for x in range(X2i[0].shape[0])]
+        
+        yield X1i[0], np.asarray(mask_encoded)
+
 def ValAugmentGenerator(DATA_PATH, id2code, seed = 1, batch_size = 5):
 
     val_image_generator = val_frames_datagen.flow_from_directory(
@@ -176,6 +192,27 @@ def ValAugmentGenerator(DATA_PATH, id2code, seed = 1, batch_size = 5):
     val_mask_generator = val_masks_datagen.flow_from_directory(
     DATA_PATH + 'val_masks/',
     batch_size = batch_size, seed = seed, target_size = (224, 224))
+
+
+    while True:
+        X1i = val_image_generator.next()
+        X2i = val_mask_generator.next()
+        
+        #One hot encoding RGB images
+        mask_encoded = [rgb_to_onehot(X2i[0][x,:,:,:], id2code) for x in range(X2i[0].shape[0])]
+        
+        yield X1i[0], np.asarray(mask_encoded)
+
+def ValAugmentGenerator2(DATA_PATH, id2code, seed = 1, batch_size = 5):
+    
+    val_image_generator = val_frames_datagen.flow_from_directory(
+    DATA_PATH + 'val_frames/',
+    batch_size = batch_size, seed = seed, target_size = (227, 227))
+
+
+    val_mask_generator = val_masks_datagen.flow_from_directory(
+    DATA_PATH + 'val_masks/',
+    batch_size = batch_size, seed = seed, target_size = (227, 227))
 
 
     while True:
@@ -293,52 +330,19 @@ def alexNetSegmentation(n_classes, input_height=227, input_width=227):
     x = MaxPooling2D((3, 3), strides=(2, 2), name='block3_pool', data_format='channels_last')(x)
     f3 = x
 
-    x = Flatten(name='flatten')(x)
+    # x = Flatten(name='flatten')(x)
     x = Dense(4096, activation='relu', name='fc1')(x)
     x = Dense(4096, activation='relu', name='fc2')(x)
-    x = Dense(1000, activation='softmax', name='predictions')(x)
 
-    alexnet  = Model(img_input, x)
+    x = Conv2D(21, (1, 1), activation='relu', padding='same', strides=(1, 1), name='dec_1', data_format='channels_last')(x)
+    x = Conv2DTranspose(32 ,(63,63), strides=(32, 32),data_format='channels_last')(x)
 
-    AlexNet_Weights_path = 'pretrained_weights/alexnet_weights.h5'
-    alexnet.load_weights(AlexNet_Weights_path)
-
-
-    levels = [f1, f2, f3]
-    alexnet_level = 2
-
-    o = levels[alexnet_level]
-    o = (ZeroPadding2D((1,1), data_format='channels_last'))(o)
-    o = (Conv2D(512, (3, 3), padding='valid', data_format='channels_last'))(o)
-    o = (BatchNormalization())(o)
-    
-    o = (UpSampling2D((2,2), data_format='channels_last'))(o)
-    o = (ZeroPadding2D((1,1), data_format='channels_last'))(o)
-    o = (Conv2D(512, (3, 3), padding='valid', data_format='channels_last'))(o)
-    o = (BatchNormalization())(o)
-    
-    o = (UpSampling2D((2,2), data_format='channels_last'))(o)
-    o = (ZeroPadding2D((1,1), data_format='channels_last'))(o)
-    o = (Conv2D(256, (3, 3), padding='valid', data_format='channels_last'))(o)
-    o = (BatchNormalization())(o)
-
-    o = (UpSampling2D((2,2), data_format='channels_last'))(o)
-    o = (ZeroPadding2D((1,1), data_format='channels_last'))(o)
-    o = (Conv2D(128, (3, 3), padding='valid', data_format='channels_last'))(o)
-    o = (BatchNormalization())(o)
-
-    o = (UpSampling2D((2,2), data_format='channels_last'))(o)
-    o = (ZeroPadding2D((1,1), data_format='channels_last'))(o)
-    o = (Conv2D(64, (3, 3), padding='valid', data_format='channels_last'))(o)
-    o = (BatchNormalization())(o)
-    
-    
-    o = Conv2D(n_classes, (3, 3), padding='same', data_format='channels_last')(o)
-    o = (Activation('softmax'))(o)
+    x = ZeroPadding2D((2, 2))(x)
+    o = x
 
     model = Model(img_input, o)
-
-    return
+    print(model.summary())
+    return model
 
 def ResNetSegmentation(n_classes, input_height=224, input_width=224):
 
@@ -379,10 +383,6 @@ def ResNetSegmentation(n_classes, input_height=224, input_width=224):
     model = Model(img_input, o)
 
     return model
-
-def uNetSegmentation():
-
-    return 
 
 def vgg19Segmentation(n_classes, input_height=224, input_width=224):
 
@@ -441,10 +441,10 @@ train_masks_datagen = ImageDataGenerator(**mask_gen_args)
 val_frames_datagen = ImageDataGenerator(**data_gen_args)
 val_masks_datagen = ImageDataGenerator(**mask_gen_args)
 
-
+model = alexNetSegmentation(32)
 # model = VGGSegnet(32, vgg_level=3)
 # model = ResNetSegmentation(32)
-model = vgg19Segmentation(32)
+# model = vgg19Segmentation(32)
 
 
 model.compile(optimizer='adam', loss="categorical_crossentropy", metrics=['accuracy'])
@@ -460,13 +460,11 @@ validation_steps = 4.0
 num_epochs = 2
 
 batch_size = 5
-result = model.fit_generator(TrainAugmentGenerator(DATA_PATH=img_dir, id2code=id2code), steps_per_epoch=steps_per_epoch,
-                validation_data = ValAugmentGenerator(DATA_PATH=img_dir, id2code=id2code), 
+result = model.fit_generator(TrainAugmentGenerator2(DATA_PATH=img_dir, id2code=id2code), steps_per_epoch=steps_per_epoch,
+                validation_data = ValAugmentGenerator2(DATA_PATH=img_dir, id2code=id2code), 
                 validation_steps = validation_steps, epochs=num_epochs, callbacks=callbacks, verbose=1)
 
 model.save_weights("camvid_model_resnet_segnet.h5", overwrite=True)
-
-
 
 
 # Get actual number of epochs model was trained for
