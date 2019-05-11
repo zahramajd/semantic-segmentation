@@ -1,6 +1,7 @@
 ## Semantic Segmentation
 #TODO:
 # test parameters
+# load all images
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -441,8 +442,8 @@ train_masks_datagen = ImageDataGenerator(**mask_gen_args)
 val_frames_datagen = ImageDataGenerator(**data_gen_args)
 val_masks_datagen = ImageDataGenerator(**mask_gen_args)
 
-model = alexNetSegmentation(32)
-# model = VGGSegnet(32, vgg_level=3)
+# model = alexNetSegmentation(32)
+model = VGGSegnet(32, vgg_level=3)
 # model = ResNetSegmentation(32)
 # model = vgg19Segmentation(32)
 
@@ -450,21 +451,20 @@ model = alexNetSegmentation(32)
 model.compile(optimizer='adam', loss="categorical_crossentropy", metrics=['accuracy'])
 
 tb = TensorBoard(log_dir='logs', write_graph=True)
-mc = ModelCheckpoint(mode='max', filepath='camvid_model_resnet_segnet_checkpoint.h5', monitor='accuracy', save_best_only='True', save_weights_only='True', verbose=1)
+mc = ModelCheckpoint(mode='max', filepath='camvid_model_vgg16_segnet_checkpoint.h5', monitor='accuracy', save_best_only='True', save_weights_only='True', verbose=1)
 es = EarlyStopping(mode='min', monitor='val_loss', patience=50, verbose=1)
 callbacks = [tb, mc, es]
 
-batch_size = 5
-steps_per_epoch = 16.0
+batch_size = 32
+steps_per_epoch = 15.0
 validation_steps = 4.0
-num_epochs = 2
+num_epochs = 20
 
-batch_size = 5
-result = model.fit_generator(TrainAugmentGenerator2(DATA_PATH=img_dir, id2code=id2code), steps_per_epoch=steps_per_epoch,
-                validation_data = ValAugmentGenerator2(DATA_PATH=img_dir, id2code=id2code), 
+result = model.fit_generator(TrainAugmentGenerator(DATA_PATH=img_dir, id2code=id2code), steps_per_epoch=steps_per_epoch,
+                validation_data = ValAugmentGenerator(DATA_PATH=img_dir, id2code=id2code), 
                 validation_steps = validation_steps, epochs=num_epochs, callbacks=callbacks, verbose=1)
 
-model.save_weights("camvid_model_resnet_segnet.h5", overwrite=True)
+model.save_weights("camvid_model_vgg16_segnet.h5", overwrite=True)
 
 
 # Get actual number of epochs model was trained for
@@ -491,31 +491,31 @@ plt.ylabel("Loss/Accuracy")
 plt.legend(loc="lower left")
 plt.show()
 
-# training_gen = TrainAugmentGenerator(DATA_PATH=img_dir, id2code=id2code)
-# testing_gen = ValAugmentGenerator(DATA_PATH=img_dir, id2code=id2code)
+training_gen = TrainAugmentGenerator(DATA_PATH=img_dir, id2code=id2code)
+testing_gen = ValAugmentGenerator(DATA_PATH=img_dir, id2code=id2code)
 
-# batch_img,batch_mask = next(testing_gen)
-# pred_all= model.predict(batch_img)
-# np.shape(pred_all)
+batch_img,batch_mask = next(testing_gen)
+pred_all= model.predict(batch_img)
+np.shape(pred_all)
 
-# for i in range(0,np.shape(pred_all)[0]):
+for i in range(0,np.shape(pred_all)[0]):
     
-#     fig = plt.figure(figsize=(20,8))
+    fig = plt.figure(figsize=(20,8))
     
-#     ax1 = fig.add_subplot(1,3,1)
-#     ax1.imshow(batch_img[i])
-#     ax1.title.set_text('Actual frame')
-#     ax1.grid(b=None)
+    ax1 = fig.add_subplot(1,3,1)
+    ax1.imshow(batch_img[i])
+    ax1.title.set_text('Actual frame')
+    ax1.grid(b=None)
     
     
-#     ax2 = fig.add_subplot(1,3,2)
-#     ax2.set_title('Ground truth labels')
-#     ax2.imshow(onehot_to_rgb(batch_mask[i],id2code))
-#     ax2.grid(b=None)
+    ax2 = fig.add_subplot(1,3,2)
+    ax2.set_title('Ground truth labels')
+    ax2.imshow(onehot_to_rgb(batch_mask[i],id2code))
+    ax2.grid(b=None)
     
-#     ax3 = fig.add_subplot(1,3,3)
-#     ax3.set_title('Predicted labels')
-#     ax3.imshow(onehot_to_rgb(pred_all[i],id2code))
-#     ax3.grid(b=None)
+    ax3 = fig.add_subplot(1,3,3)
+    ax3.set_title('Predicted labels')
+    ax3.imshow(onehot_to_rgb(pred_all[i],id2code))
+    ax3.grid(b=None)
     
-#     plt.show()
+    plt.show()
