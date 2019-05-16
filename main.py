@@ -1,7 +1,6 @@
 ## Semantic Segmentation
 #TODO:
 # test parameters
-# load all images
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -277,27 +276,27 @@ def VGGSegnet(n_classes, input_height=224, input_width=224, vgg_level=3):
     o = levels[vgg_level]
 
     o = (ZeroPadding2D((1,1), data_format='channels_last'))(o)
-    o = (Conv2D(512, (3, 3), padding='valid', data_format='channels_last'))(o)
+    o = (Conv2D(512, (3, 3), padding='valid', data_format='channels_last', activation='elu'))(o)
     o = (BatchNormalization())(o)
     
     o = (UpSampling2D((2,2), data_format='channels_last'))(o)
     o = (ZeroPadding2D((1,1), data_format='channels_last'))(o)
-    o = (Conv2D(512, (3, 3), padding='valid', data_format='channels_last'))(o)
+    o = (Conv2D(512, (3, 3), padding='valid', data_format='channels_last',activation='elu'))(o)
     o = (BatchNormalization())(o)
     
     o = (UpSampling2D((2,2), data_format='channels_last'))(o)
     o = (ZeroPadding2D((1,1), data_format='channels_last'))(o)
-    o = (Conv2D(256, (3, 3), padding='valid', data_format='channels_last'))(o)
+    o = (Conv2D(256, (3, 3), padding='valid', data_format='channels_last',activation='elu'))(o)
     o = (BatchNormalization())(o)
 
     o = (UpSampling2D((2,2), data_format='channels_last'))(o)
     o = (ZeroPadding2D((1,1), data_format='channels_last'))(o)
-    o = (Conv2D(128, (3, 3), padding='valid', data_format='channels_last'))(o)
+    o = (Conv2D(128, (3, 3), padding='valid', data_format='channels_last',activation='elu'))(o)
     o = (BatchNormalization())(o)
 
     o = (UpSampling2D((2,2), data_format='channels_last'))(o)
     o = (ZeroPadding2D((1,1), data_format='channels_last'))(o)
-    o = (Conv2D(64, (3, 3), padding='valid', data_format='channels_last'))(o)
+    o = (Conv2D(64, (3, 3), padding='valid', data_format='channels_last',activation='elu'))(o)
     o = (BatchNormalization())(o)
     
     
@@ -354,31 +353,31 @@ def ResNetSegmentation(n_classes, input_height=224, input_width=224):
     o = resnet_model.get_layer('activation_39').output
 
     o = (ZeroPadding2D((1,1), data_format='channels_last'))(o)
-    o = (Conv2D(512, (3, 3), padding='valid', data_format='channels_last'))(o)
+    o = (Conv2D(512, (3, 3), padding='valid', data_format='channels_last', kernel_initializer='he_uniform'))(o)
     o = (BatchNormalization())(o)
     
     o = (UpSampling2D((2,2), data_format='channels_last'))(o)
     o = (ZeroPadding2D((1,1), data_format='channels_last'))(o)
-    o = (Conv2D(512, (3, 3), padding='valid', data_format='channels_last'))(o)
+    o = (Conv2D(512, (3, 3), padding='valid', data_format='channels_last', kernel_initializer='he_uniform'))(o)
     o = (BatchNormalization())(o)
     
     o = (UpSampling2D((2,2), data_format='channels_last'))(o)
     o = (ZeroPadding2D((1,1), data_format='channels_last'))(o)
-    o = (Conv2D(256, (3, 3), padding='valid', data_format='channels_last'))(o)
+    o = (Conv2D(256, (3, 3), padding='valid', data_format='channels_last', kernel_initializer='he_uniform'))(o)
     o = (BatchNormalization())(o)
 
     o = (UpSampling2D((2,2), data_format='channels_last'))(o)
     o = (ZeroPadding2D((1,1), data_format='channels_last'))(o)
-    o = (Conv2D(128, (3, 3), padding='valid', data_format='channels_last'))(o)
+    o = (Conv2D(128, (3, 3), padding='valid', data_format='channels_last', kernel_initializer='he_uniform'))(o)
     o = (BatchNormalization())(o)
 
     o = (UpSampling2D((2,2), data_format='channels_last'))(o)
     o = (ZeroPadding2D((1,1), data_format='channels_last'))(o)
-    o = (Conv2D(64, (3, 3), padding='valid', data_format='channels_last'))(o)
+    o = (Conv2D(64, (3, 3), padding='valid', data_format='channels_last', kernel_initializer='he_uniform'))(o)
     o = (BatchNormalization())(o)
     
     
-    o = Conv2D(n_classes, (3, 3), padding='same', data_format='channels_last')(o)
+    o = Conv2D(n_classes, (3, 3), padding='same', data_format='channels_last', kernel_initializer='he_uniform')(o)
     o = (Activation('softmax'))(o)
 
     model = Model(img_input, o)
@@ -425,11 +424,40 @@ def vgg19Segmentation(n_classes, input_height=224, input_width=224):
 
     return model
 
+def tversky_loss(y_true, y_pred):
+    alpha = 0.5
+    beta  = 0.5
+    
+    ones = K.ones(K.shape(y_true))
+    p0 = y_pred      # proba that voxels are class i
+    p1 = ones-y_pred # proba that voxels are not class i
+    g0 = y_true
+    g1 = ones-y_true
+    
+    num = K.sum(p0*g0, (0,1,2,3))
+    den = num + alpha*K.sum(p0*g1,(0,1,2,3)) + beta*K.sum(p1*g0,(0,1,2,3))
+    
+    T = K.sum(num/den) # when summing over classes, T has dynamic range [0 Ncl]
+    
+    Ncl = K.cast(K.shape(y_true)[-1], 'float32')
+    return Ncl-T
+
+def dice_coef(y_true, y_pred):
+    smooth = 1.
+    y_true_f = K.flatten(y_true)
+    y_pred_f = K.flatten(y_pred)
+    intersection = K.sum(y_true_f * y_pred_f)
+    return (2. * intersection + smooth) / (K.sum(y_true_f*y_true_f) + K.sum(y_pred_f*y_pred_f) + smooth)
+
+def dice_coef_loss(y_true, y_pred):
+    return 1.-dice_coef(y_true, y_pred)
+
+
 img_dir = 'data/CamSeq01/'
 
 # just once at beggining
-# frame_tensors, masks_tensors, frames_list, masks_list = read_images(img_dir)
-# generate_image_folder_structure(img_dir, frame_tensors, masks_tensors, frames_list, masks_list)
+frame_tensors, masks_tensors, frames_list, masks_list = read_images(img_dir)
+generate_image_folder_structure(img_dir, frame_tensors, masks_tensors, frames_list, masks_list)
 
 id2code = convert_labels(img_dir)
 
@@ -448,7 +476,9 @@ model = VGGSegnet(32, vgg_level=3)
 # model = vgg19Segmentation(32)
 
 
-model.compile(optimizer='adam', loss="categorical_crossentropy", metrics=['accuracy'])
+# model.compile(optimizer='adam', loss="categorical_crossentropy", metrics=[tversky_loss,dice_coef,'accuracy'])
+model.compile(optimizer='adam', loss=dice_coef_loss, metrics=[tversky_loss,dice_coef,'accuracy'])
+
 
 tb = TensorBoard(log_dir='logs', write_graph=True)
 mc = ModelCheckpoint(mode='max', filepath='camvid_model_vgg16_segnet_checkpoint.h5', monitor='accuracy', save_best_only='True', save_weights_only='True', verbose=1)
@@ -458,7 +488,7 @@ callbacks = [tb, mc, es]
 batch_size = 32
 steps_per_epoch = 15.0
 validation_steps = 4.0
-num_epochs = 20
+num_epochs = 30
 
 result = model.fit_generator(TrainAugmentGenerator(DATA_PATH=img_dir, id2code=id2code), steps_per_epoch=steps_per_epoch,
                 validation_data = ValAugmentGenerator(DATA_PATH=img_dir, id2code=id2code), 
